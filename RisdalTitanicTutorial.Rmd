@@ -84,53 +84,177 @@ Y ahora vamos a ver cómo se distribuye la tasa de sobrevivientes y muertos seg�
 ggplot(full[1:891,], aes(x = Fsize, fill = factor(Survived))) +
   geom_bar(stat='count', position='dodge') +
   scale_x_continuous(breaks=c(1:11)) +
-  labs(x = 'Family Size') +
+  labs(x = 'Tamaño de la familia', y = "conteo") +
   theme_few()
 ```
 
+Aquí podemos apreciar algo interesantes y es que por un lado aquellos que viajaban solos tenían más posibilidades de morir, por otro lado, cuando el tamaño de las familias pasa de 4 entonces el número de muertes es mayor que el de vivos. Por lo tanto aquí observamos que se intentaba que las familias fuesen evacuadas juntas pero que cuando la familia era de un tamaño mayor entonces esto era más difícil; al menos esto podemos interpretar de la gráfica anterior. A la luz de este análisis vamos a establecer 3 tipos de pasajeros: aquellos que viajaban solos, los que iban con una familia de tamaño reducido (como mucho 4 familiares) y los que embarcaron con una familia numerosa:
 
-To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+```{r}
+full$FsizeD[full$Fsize == 1] <- 'singleton'
+full$FsizeD[full$Fsize < 5 & full$Fsize > 1] <- 'small'
+full$FsizeD[full$Fsize > 4] <- 'large'
 
-## Inputs and Outputs
-
-You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
-
-```{r eruptions, echo=FALSE}
-inputPanel(
-  selectInput("n_breaks", label = "Number of bins:",
-              choices = c(10, 20, 35, 50), selected = 20),
-  
-  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
-              min = 0.2, max = 2, value = 1, step = 0.2)
-)
-
-renderPlot({
-  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
-       xlab = "Duration (minutes)", main = "Geyser eruption duration")
-  
-  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
-  lines(dens, col = "blue")
-})
+mosaicplot(table(full$FsizeD, full$Survived), main='Proporción de sobrevivientes por tamaño', shade=TRUE)
 ```
 
-## Embedded Application
+Y en la gráfica anterior lo que vemos es que efectivamente era mayor la probabilidad de sobrevivir para los individuos que viajaban con su familia pero siempre que esta familia fuese de un tamaño reducido.
 
-It's also possible to embed an entire Shiny application within an R Markdown document using the `shinyAppDir` function. This example embeds a Shiny application located in another directory:
+Aunque tenemos valores perdidos de los que nos vamos a ocupar en la próxima sección, lo que vamos a hacer es construir una nueva variable en la que se extrae la cubierta en la cual esta embarcado el pasajero. Esto lo vamos a extraer del camarote de cada pasejero por medio del siguiente código, que lo único que hace es separar cada cadena en los caracteres que la forman y quedarse con el primero; la letra que designa la cubierta:
 
-```{r tabsets, echo=FALSE}
-shinyAppDir(
-  system.file("examples/06_tabsets", package = "shiny"),
-  options = list(
-    width = "100%", height = 550
-  )
-)
+```{r}
+full$Deck<-factor(sapply(full$Cabin, function(x) strsplit(x, NULL)[[1]][1]))
 ```
 
-Note the use of the `height` parameter to determine how much vertical space the embedded application should occupy.
+# Valores perdidos
 
-You can also use the `shinyApp` function to define an application inline rather then in an external directory.
+En primer lugar se observa que los pasajeros 62 y 830 no tienen información en el atributo que nos informa desde qué puerto se embarcaron los pasajeros, así que lo que se va a hacer es tratar de deducirlo a partir de otros datos que sí tenemos del pasajero. Señalar que a continuación se va a emplear información de todo el dataset incluido los datos de test, esto es algo del todo adecuado ya que teóricamente no se dispone del conjunto de test durante el entrenamiento. No obstante a modo de entrenamiento lo haremos así. Vamos a deducir el puerto desde el que embarcaron los pasajeros a partir de lo que pagaron por su billete y la clase de su pasaje que coincide en ambos (80$ en primera clase):
 
-In all of R code chunks above the `echo = FALSE` attribute is used. This is to prevent the R code within the chunk from rendering in the document alongside the Shiny components.
+```{r}
+embark_fare <- full %>%
+  filter(PassengerId != 62 & PassengerId != 830)
 
+# Use ggplot2 to visualize embarkment, passenger class, & median fare
+ggplot(embark_fare, aes(x = Embarked, y = Fare, fill = factor(Pclass))) +
+  geom_boxplot() +
+  geom_hline(aes(yintercept=80), 
+    colour='red', linetype='dashed', lwd=2) +
+  scale_y_continuous(labels=dollar_format()) +
+  theme_few()
+```
 
+Y lo que vemos en la siguiente gráfica que nos muestra por puerto de embarque y clase de pasaje cómo se distribuye la tarifa pagada, es que la tarifa media para un pasajero de primera clase que embarcase desde el puerto C está muy próxima a los 80$ que pagaron los dos pasajeros, con lo cual lo que vamos a hacer es asociarle este puerto de embarque a ambos:
 
+```{r}
+full$Embarked[c(62, 830)] <- 'C'
+```
+
+Hay otro pasajero, el 1044, que tiene como valor perdido (además de si sobrevivió o no, ya que es una instancia del dataset de test) la tarifa que pagó. Entonces vamos a tratar de deducirla a partir de los datos que tenemos. Este pasajero compró un billete de tercera clase desde el puerto S, con lo cual vamos a ver qué pagaron otros pasajeros con las mismas características (podríamos pensar también en trabajar con la edad del pasajero pero en esta ocasión esto no se ha tenido en cuenta):
+
+```{r}
+ggplot(full[full$Pclass == '3' & full$Embarked == 'S', ], 
+  aes(x = Fare)) +
+  geom_density(fill = '#99d6ff', alpha=0.4) + 
+  geom_vline(aes(xintercept=median(Fare, na.rm=T)),
+    colour='red', linetype='dashed', lwd=1) +
+  scale_x_continuous(labels=dollar_format()) +
+  theme_few()
+```
+
+A partir de esta gráfica vemos que asignarle como tarifa la media de lo que pagaron el resto de pasajeros con las mismas características no parece una mala aproximación, hay un gran concentración de instancias al rededor de la media:
+
+```{r}
+full$Fare[1044] <- median(full[full$Pclass == '3' & full$Embarked == 'S', ]$Fare, na.rm = TRUE)
+```
+
+Antes de continuar vamos a ver cómo se distribuyen los valores perdidos que quedan en el dataset:
+
+```{r}
+apply(full, 2, function(x) sum(is.na(x)))
+```
+
+Aquí lo que vemos es que los valores perdidos que nos quedan están en la de los pasajeros y en la cubierta, esto último no es cierto, lo que ocurre es que realmente hay muchos pasajeros en los que no está especificado el camarote en el que estuvo el pasajero. Lo que vamos a hacer es imputar estos valores usando un modelo predictivo, para ello vamos a usar el paquete `mice`. Pero antes vamos a pasar a factor las variables que son de esta naturaleza y que en el dataset no están recogidas de esta forma:
+
+```{r}
+factor_vars <- c('PassengerId','Pclass','Sex','Embarked','Title','Surname','Family','FsizeD')
+full[factor_vars] <- lapply(full[factor_vars], function(x) as.factor(x))
+```
+
+```{r, message=FALSE}
+set.seed(129)
+mice_mod <- mice(full[, !names(full) %in% c('PassengerId','Name','Ticket','Cabin','Family','Surname','Survived')], method='rf') 
+```
+
+Aquí se están imputando todas las dos variables que presentan valores perdidos que ya hemos mencionado usando partición recursiva para regresión (la edad se puede considerar un atributo continuo al tener tanta granularidad en sus valores), la expresión lógica que empleamos es para que no se use en el modelo predictivo aquellas variables que no consideramos útiles para tal propósito. Vamos a ver a continuación la distribución de edades en el dataset original y en el devuelto por `mice` para ver que tienen cierta consonancia y que la imputación no ha distorsionado los datos:
+
+```{r}
+mice_output <- complete(mice_mod)
+
+par(mfrow=c(1,2))
+hist(full$Age, freq=F, main='Age: Original Data', 
+  col='darkgreen', ylim=c(0,0.04))
+hist(mice_output$Age, freq=F, main='Age: MICE Output', 
+  col='lightgreen', ylim=c(0,0.04))
+```
+
+Como vemos que las distribuciones son similares damos por buena la imputación obtenida y pasamos a sustituir los valores perdidos por los predichos con `mice`:
+
+```{r}
+full$Age <- mice_output$Age
+```
+
+# Algo más de ingeniería de características
+
+Vamos a ver cómo se distribuye para cada sexo la tasa de sobreviviente según la edad; ahora que tenemos todas las instancias con una edad asignada podemos hacer este tipo de estudios para el dataset completo sin dejar fuera aquellas instancias que no presentaban edad:
+
+```{r}
+ggplot(full[1:891,], aes(Age, fill = factor(Survived))) + 
+  geom_histogram() +
+  facet_grid(.~Sex) + 
+  theme_few()
+```
+
+Aquí lo que podemos apreciar es en primer lugar que las mujeres sobreviven en mayor proporción que los hombres, por otro lado los hombres jóvenes parecen sobrevivir en mayor proporción que los mayores, al contrario que ocurre con las mujeres.
+
+Vamos a crear dos nuevas variables, una que nos indica si el pasajero es un niño, considerando como niño una persona menor que 18 años (nuestro compañero Jose Ángel Díaz mejoró los resultados considerando niño aquel que tuviese menos de 16 años ya que pensó que en aquella época se consideraba adulto antes a una persona, estudiaremos esto más adelante). La otra nos indica si el pasajero es madre, para ello vemos si es una mujer por encima de los 18 años y con al menos un hijo:
+
+```{r}
+full$Child[full$Age < 18] <- 'Child'
+full$Child[full$Age >= 18] <- 'Adult'
+
+full$Mother <- 'Not Mother'
+full$Mother[full$Sex == 'female' & full$Parch > 0 & full$Age > 18 & full$Title != 'Miss'] <- 'Mother'
+
+full$Child  <- factor(full$Child)
+full$Mother <- factor(full$Mother)
+```
+
+# Finalmente hacemos predicción
+
+```{r}
+train <- full[1:891,]
+test <- full[892:1309,]
+
+rf_model <- randomForest(factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + 
+                                            Fare + Embarked + Title + 
+                                            FsizeD + Child + Mother,
+                                            data = train)
+
+plot(rf_model, ylim=c(0,0.36))
+legend('topright', colnames(rf_model$err.rate), col=1:3, fill=1:3)
+```
+
+En la gráfica anterior podemos ver el error medio, el error en los positivos y el error en los negativos según aumenta el número de árboles empleados en la predicción. Vamos a ver ahora la importancia de cada una de las variables en la creación del modelo:
+
+```{r}
+importance    <- importance(rf_model)
+varImportance <- data.frame(Variables = row.names(importance), 
+                            Importance = round(importance[ ,'MeanDecreaseGini'],2))
+
+rankImportance <- varImportance %>% mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+    y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+    hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables') +
+  coord_flip() + 
+  theme_few()
+```
+
+Como vemos las variables con más importancia son el título del pasajero, la tarifa que pagó, su sexo y la edad. Finalmente hacemos nuestra predicción:
+
+```{r}
+prediction <- predict(rf_model, test)
+solution <- data.frame(PassengerID = test$PassengerId, Survived = prediction)
+write.csv(solution, file = 'sols/RiscalSol.csv', row.names = F, quote = F)
+```
+
+A continuación se muestra el código empleado para generar una predicción completamente aleatoria:
+
+```{r, eval=FALSE}
+randomPrediction = sample(c(0,1), nrow(test), replace = T)
+randomSolution <- data.frame(PassengerID = test$PassengerId, Survived = randomPrediction)
+write.csv(randomSolution, file = 'sols/randomSol.csv', row.names = F, quote = F)
+```
