@@ -9,6 +9,13 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+library(ggplot2) #visualizacion
+library(ggthemes) #visualizacion
+library(scales) #visualizacion
+```
+
+
 # Introducción
 
 Lo que vamos a hacer a continuación es, realizar un tutorial en el que emplearemos nuevas técnicas sobre el dataset del Titanic que nos ayudarán a subir algunos puntos en la competición. Cabe señalar que este tutorial es algo más extenso de lo que nosotros vamos a reflejar aquí, ya que por un lado se trata de un tutorial introductorio que incluso explica cómo usar Rstudio, y por otro ya hemos realizado el tutorial de Megan Risdal previamente con lo que habrá pasos comunes a ambos tutoriales que no necesiten de más explicación.
@@ -22,5 +29,16 @@ train <- read.csv('data/train.csv', stringsAsFactors = FALSE)
 test <- read.csv('data/test.csv', stringsAsFactors = FALSE)
 ```
 
+```{r}
+prop.table(table(train$Survived))
+```
+
+Aquí podemos ver cómo la tasa de mortandas es elevada en el conjunto de *train*, con lo cual la primera predicción que se realiza en el tutorial es la de suponer que todos los pasajeros del conjunto de test murieron. Con esto se consigue una tasa de acierto de **0.62679**. Lo cuál ya nos da información sobre el conjuto de test, ya que vemos cómo la proporción de muertos y sobrevivientes en el conjunto de test es muy similar a la del conjunto de *train*.
+
+Veamos ahora, en una gráfica, cómo se distribuyen los muertos y sobrevivientes según el sexo de los pasajeros:
+
+```{r}
+ggplot(train,  aes(x = train$Survived) ) + geom_bar()
+```
 
 
