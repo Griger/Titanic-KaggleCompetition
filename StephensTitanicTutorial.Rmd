@@ -6,13 +6,13 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 ```{r}
-library(ggplot2) #visualizacion
-library(ggthemes) #visualizacion
-library(scales) #visualizacion
+library(rpart) #arboles de decision
+
+library(ratt)
 ```
 
 
@@ -35,10 +35,67 @@ prop.table(table(train$Survived))
 
 Aquí podemos ver cómo la tasa de mortandas es elevada en el conjunto de *train*, con lo cual la primera predicción que se realiza en el tutorial es la de suponer que todos los pasajeros del conjunto de test murieron. Con esto se consigue una tasa de acierto de **0.62679**. Lo cuál ya nos da información sobre el conjuto de test, ya que vemos cómo la proporción de muertos y sobrevivientes en el conjunto de test es muy similar a la del conjunto de *train*.
 
-Veamos ahora, en una gráfica, cómo se distribuyen los muertos y sobrevivientes según el sexo de los pasajeros:
+Veamos ahora cómo se distribuyen los muertos y sobrevivientes según el sexo de los pasajeros:
 
 ```{r}
-ggplot(train,  aes(x = train$Survived) ) + geom_bar()
+prop.table(table(train$Sex, train$Survived),1)
 ```
+
+Como podemos ver, en proporción, los hombres son los que más perecieron mientras que las mujeres tuvieron mayor posibilidad de sobrevivir, recordemos que en el Titanic se estableció la política de evacuar a mujeres y niños en primer lugar. Pues bien, con esta observación tan simple podemos contruir un nuevo modelo que mejora al anterior, lo que podríamos llamar un **modelo sexista**. En este modelo lo que hacemos es suponer que todos los hombre del conjunto de test murieron y todas las mujeres sobrevivieron al accidente. Con este modelo se alcanza una tasa de acierto de **0.76555**.
+
+# Considerando la edad de los pasajeros
+
+A continuación, al igual que hicimos en el tutorial de Megan Risdal, vamos a considerar la edad de los pasajeros y vamos a crear una nueva variable que nos indique si un individuo es adulto o no, considerando adulto a una persona a partir de los 18 años. Recordemos, como vamos a ver a continuación, que la edad era una atributo que presentaba *valores perdidos*, no obstante y por como trata R los **NA**, para la variable que vamos a fabrir no vamos a realizar una *imputación* de dichos valores.
+
+```{r}
+summary(train$Age)
+```
+
+Como podemos ver, en el atributo Age, tenemos exactamente 177 instancias del *dataset de train* con valores perdidos. El hecho de no realizar una imputacion para estos valores se debe a que vamos a suponer que el resto de valores perdidos toman un valor cercano a la medida de la edad de los pasajeros, y con lo cual etiquetaríamos a todas las personas con valor NA como adultas. Entonces en la creación de la variable **Child** que vamos a crear a continuación, dado que un *NA* devuelve el valor falso para cualquier comprobación booleana que realicemos sobre él, el código funcionará correctamente. Tengamos en cuenta que sustituir los valores perdidos por la media de los datos que sí se conoces es una práctica que se emplea para realizar imputación, aunque poco sofisticada, con lo cual no dejamos de estar empleando técnicas usuales en la minería de datos.
+
+```{r}
+train$Child <- 0
+train$Child[train$Age < 18] <- 1
+```
+
+Señalar que se ha tratado de hacer el código anterior en una sola línea haciendo uso del método `ifelse` que proprociona R, pero no se conseguí el mismo efecto ya que a aquellas instancias con valor perdido en la edad se le asignaba el valor NA en lugar del cero como se deseaba.
+
+Ahora que tenemos esta variable vamos a ver la proporción de sobrevivientes según el sexo y si el pasajero era o no adulto, esto nos ayudará a obtener información del dataset y crear un nuevo modelo de predicción. Recordemos que esta variable también se crea en el tutorial de Megan Risdal.
+
+```{r}
+aggregate(Survived ~ Child + Sex, data=train, FUN=function(x) {sum(x)/length(x)})
+```
+
+Aunque aquí podemos ver que los niños sobrevivieron en mayor medida que los hombres adultos no podemos decir que todos los niños sobreviviesen ya que la proporción sigue siendo muy pequeña, sobre todo si la comparamos con la de mujeres (adultas o no) sobreviviente. Con lo cual, a fin de obtener un nuevo modelo predictivo vamos a estudiar dos variables más: la clase en la que embarcó cada pasajero y lo que pagaron por su pasaje.
+
+Como queremos hacer un estudio parecido al anterior, ya que la tarifa que pagó cada pasajero es una variable continua y no queremos tener una tabla con una granularidad excesiva, vamos a crear una nueva variable que discretiza la anterior.
+
+```{r}
+train$Fare2 <- '30+'
+train$Fare2[train$Fare < 30 & train$Fare >= 20] <- '20-30'
+train$Fare2[train$Fare < 20 & train$Fare >= 10] <- '10-20'
+train$Fare2[train$Fare < 10] <- '<10'
+```
+
+Como podemos ver clasificamos las tarifas según si están por debajo de 10 dólares, entre 10 y 20, entre 20 y 30, y tarifas de más de 30 dólares.
+
+```{r}
+aggregate(Survived ~ Fare2 + Pclass + Sex, data=train, FUN=function(x) {sum(x)/length(x)})
+```
+
+Como podemos ver la proporción de hombres sobreviviente sigue siendo muy pequeña sea cual sea su clase o la tarifa que pagaron por su pasaje. Sí que apreciamos algo interesante para las mujeres, mientras que en proporción sobrevivieron más que los hombres, aquellas mujeres de tercera clase que pagaron 20$ o más por su pasaje tendieron a perecer en la catrástofe. En base a esto podríamos realizar la siguiente predicción. La cual va un poco más allá que el modelo sexista anterior:
+
+```{r}
+test$Survived <- 0
+test$Survived[test$Sex == 'female'] <- 1
+test$Survived[test$Sex == 'female' & test$Pclass == 3 & test$Fare >= 20] <- 0
+```
+
+Con esta predicción se obtiene una tasa de acierto de **0.7799**. A continuación vamos dar un paso más en la predicción usando modelos construidos de forma automática con árboles de decisión.
+
+# Árboles de decisión
+
+A continuación vamos 
+
 
 
