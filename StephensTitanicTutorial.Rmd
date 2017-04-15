@@ -6,13 +6,18 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
 ```
 
 ```{r}
 library(rpart) #arboles de decision
 
-library(ratt)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+
+library(randomForest)
+library(party)
 ```
 
 
@@ -95,7 +100,178 @@ Con esta predicción se obtiene una tasa de acierto de **0.7799**. A continuaci�
 
 # Árboles de decisión
 
-A continuación vamos 
+A continuación vamos elaborar un modelo de predicción basado en un árbol de decisión. En esta ocasión para elaborar el árbol no vamos a a tener en cuenta el nombre del pasajero, su número de pasaje ni el de su camarote puesto que no constituyen, en principio, más que identificadores únicos.
+
+```{r}
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked, data = train, method = "class")
+```
+
+Veamos este árbol, para ello vamos a hacer uso del paquete 
+
+```{r}
+fancyRpartPlot(fit)
+```
+
+Vamos a intentar describir las decisiones que se están tomando en este árbol:
+
+* En el primer nivel tenemos un nodo que predice que todos los pasajeros del conjunto de entrenamiento perecieron.
+* En el segundo nivel separamos los nodos según el sexo y tendríamos el modelo sexista del que hablamos anteriormente, sólo las mujeres se etiquetarán como sobrevivientes.
+* En la primera rama del nivel anterior tenemos el 65% de la población. Aquellos hombres con más de 6.5 años te etiquetan como no-sobreviente, mientras que si el pasajero era un niño menor de 6.5 años (el 3% de la población) entonces en caso de viajar con 3 hermanos o más, éste se supone sobreviviente.
+* Vemos también cómo aquellas mujers de tercera clase, el 19% de la población, se supone que sobrevivieron al accidente.
+* Por otro lado aquellas de mejro clase que pagaron más de 23$ el modelo supone que perecieron.
+
+En el tutorial se elabora un árbol de decisión más complejo en el que se pone de manifiest el problema del sobreajuste ya que se obtiene una tasa de acierto muy baja, **0.74163**, pero que el modelo sexista. Además de esto este ejemplo también sirve para conocer algunos parámetros del método `rpart`. Por un lado tenemos `cp` que es la métrica que se tiene en cuenta para considerar una nueva ramificación en el árbol como importante o no. Y también tenemos `minsplit`, entre otros, este parámetro nos dice cuántas instancias del conjunto que le pasamos al método ha de haber como mínimo en un nodo del árbol para realizar una ramificación a partir de él. El tutorial se establece `cp = 0` y `minsplit = 2` con lo que se obtiene un árbol muy ramificado que, como hemos dicho, sufre de sobreajuste.
+
+# Fabricando nuevas variables
+
+Al igual que en el tutorial de Megan Risdal vamos a crear una nueva variable que recoja el título del nombre de cada pasajero, para ello crearemos un nuevo dataset que combine el conjunto de test y de *train* para crear en ambos conjuntos dicha variable:
+
+```{r}
+#En esta parte del tutorial se parte de los conjuntos originales
+train <- read.csv('data/train.csv')
+test <- read.csv('data/test.csv')
+```
 
 
+```{r}
+test$Survived <- NA
+combi <- rbind(train, test)
+combi$Name <- as.character(combi$Name)
+combi$Title <- sapply(combi$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][2]})
+#queremos eliminar el primer espacio del titulo que hemos extraido
+combi$Title <- sub(' ', '', combi$Title)
+```
 
+Al igual que se hacía en el tutorial anterior, vamos a agrupar a algunos de estos títulos en uno solo por tratarse de títulos equivalente y que con lo cual no le darían a los modelos que construyamos sobre los conjuntos información relevante:
+
+```{r}
+combi$Title[combi$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
+combi$Title[combi$Title %in% c('Capt', 'Don', 'Major', 'Sir')] <- 'Sir'
+combi$Title[combi$Title %in% c('Dona', 'Lady', 'the Countess', 'Jonkheer')] <- 'Lady'
+combi$Title <- factor(combi$Title) #queremos que esta variable sea de tipo factor
+```
+
+Vamos a extraer ahora el tamaño de la familia abordo de cada pasajero, y el apellido de cada pasajero. Con estas dos variables además asignaremos un identificadores, que suponemos único, para la familia de cada pasajero. Estas variables también se crearon en el tutorial de Megan Risdal. Tiene sentido pensar que familias de mayor tamaño tuviesen problemas para ser evacuadas juntas y que unas familias en particular tuviesen más problemas que otras:
+
+```{r}
+combi$FamilySize <- combi$SibSp + combi$Parch + 1
+combi$Surname <- sapply(combi$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][1]})
+combi$FamilyID <- paste(as.character(combi$FamilySize), combi$Surname, sep="")
+combi$FamilyID[combi$FamilySize <= 2] <- 'Small'
+```
+
+Con la última línea del código anterior lo que estamos haciendo es darle el mismo identificador a todas aquellas familias de 2 o menos miembros. Ahora bien si observamos la siguiente tabla vemos que hay algunos identificadores de familia que no concuerdan con el número de veces que estos aparecen en el dataset. Por ejemplo la familia **6Richards** tiene sólo 1 pasajero asociado:
+
+```{r}
+table(combi$FamilyID)
+```
+
+Con lo cual vamos a reasignar el identificador de familia del algunos pasajeros:
+
+```{r}
+famIDs <- data.frame(table(combi$FamilyID))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+combi$FamilyID[combi$FamilyID %in% famIDs$Var1] <- 'Small'
+combi$FamilyID <- factor(combi$FamilyID)
+```
+
+Una vez que tenemos las nuevas variables que queríamos crear, que hemos completado nuestro proceso de ingeniería de características, vamos a crear un nuevo árbol de decisión; para ello primero tenemos que separar de nuevo los conjuntos de *training* y de test:
+
+```{r, eval = FALSE}
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
+fit <- rpart(Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Title + FamilySize + FamilyID, data=train, method="class")
+
+fancyRpartPlot(fit)
+```
+
+En este árbol, como se indica en el tutorial, se aprecia la tendencia de los árboles de decisión a dar mayor importancia a variables de tipo factor con muchos niveles, como es la variable con el identificador de la familia del pasajero. Con este árbol se consigue una tasa de acierto de **0.79426**.
+
+# Random Forest
+
+Anteriormente supusimos que la edad de aquellos pasajeros que presentaban un valor perdido en este atributo era la media de la de aquellos pasajeros que sí la presentan. No obstante esto no resulta muy sofisticado así que vamos a tratar de crear un árbol de decisión para predecir la edad de cada pasajero.
+
+Para ello vamos a usar nuevamente el método `rpart`, en esta ocasión le especificaremos como método `anova` que es un método para predecir variables continuas como es la edad. Señalar que, como se indica en la página de ayuda del método, en caso de no especificar ningún método, entonces `rpart` intentará elegir el que mejor se adapte a la variable a predecir.
+
+```{r}
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + FamilySize,
+                  data=combi[!is.na(combi$Age),], 
+                  method="anova")
+
+combi$Age[is.na(combi$Age)] <- predict(Agefit, combi[is.na(combi$Age),])
+```
+
+```{r}
+unique(combi$Embarked)
+```
+
+Aquí podemos ver cómo hay algunos pasajeros que presentan como puerto de embar la cadena vacía, es decir, no hay información para ellos. Dado que se trata sólo de dos pasajeros, como vamos a ver a continuación, lo que vamos a hacer es asignarle a estos pasajeros el puerto más frecuente en el *dataset*:
+
+```{r}
+which(combi$Embarked == "")
+```
+
+```{r}
+combi$Embarked[c(62,830)] = "S"
+combi$Embarked <- factor(combi$Embarked)
+```
+
+Ahora vamos a ver que el atributo **Fare** presenta un valor perdido, como se trata de sólo un valor simplemente lo que vamos a hacer es asingarle la media de la tarifa pagada por el resto de pasajeros. Se trata de una instancia del conjunto de test con lo que no es una mala práctica realizar esta asignación, no estamos usando información *oculta*:
+
+```{r}
+which(is.na(combi$Fare))
+```
+
+```{r}
+combi$Fare[1044] <- median(combi$Fare, na.rm=TRUE)
+```
+
+Con esto ya cumplimos la primera restricción que tiene el método `randomForest` de R, no admite valores perdidos en el conjunto que le pasamos. Por otro lado tampoco podemos tener factores con más de 32 niveles distintos, con lo cual el identificador de familia supone un problema para emplear este método. En el tutorial se presentan dos opciones: o bien pasar de una variable factor a una variable entera con el método `unclass` o bien reducir el número de niveles de esta variable. En el tutorial se opta por esta última.
+
+```{r}
+combi$FamilyID2 <- combi$FamilyID
+combi$FamilyID2 <- as.character(combi$FamilyID2)
+combi$FamilyID2[combi$FamilySize <= 3] <- 'Small'
+combi$FamilyID2 <- factor(combi$FamilyID2)
+```
+
+Con esto pasamos a una variable con 22 niveles, lo que hemos hecho es etiquetar con el mismo identificador a todas las familais con un tamaño de 3 miembros o menos. Una vez hemos hecho esto ya podemos pasar a construir nuestro modelo:
+
+```{r}
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
+set.seed(415)
+
+fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
+                                            Embarked + Title + FamilySize + FamilyID2,
+                      data=train, 
+                      importance=TRUE, 
+                      ntree=2000)
+```
+
+Veamos qué variables han tenido más importancia durante la generación del modelo, de los distintos árboles que componenen el model, esto lo podemos hacer ya que hemos especificado el parámetro `importance = TRUE`:
+
+```{r}
+varImpPlot(fit)
+```
+
+```{r}
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
+                                       Embarked + Title + FamilySize + FamilyID,
+                 data = train, 
+                 controls=cforest_unbiased(ntree=2000, mtry=3))
+```
+
+```{r}
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+```
+
+```{r}
+cforestSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(cforestSolution, file = 'sols/cforestStephens.csv', row.names = F, quote = F)
+```
+
+429 posición con el cforest. 15/4/17

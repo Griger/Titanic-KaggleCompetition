@@ -258,3 +258,21 @@ randomPrediction = sample(c(0,1), nrow(test), replace = T)
 randomSolution <- data.frame(PassengerID = test$PassengerId, Survived = randomPrediction)
 write.csv(randomSolution, file = 'sols/randomSol.csv', row.names = F, quote = F)
 ```
+
+## Probando xgboost
+
+```{r}
+library(xgboost)
+
+set.seed(41192)
+xgbModel <- xgboost(data = data.matrix(train[,-2]), label = train$Survived, nrounds = 10, objective = "binary:logistic")
+
+predictionXgb <- predict(xgbModel, data.matrix(test[,-2]))
+pred_final <- ifelse(predictionXgb>0.5,1,0)
+```
+
+```{r}
+xgbSolution <- data.frame(PassengerID = test$PassengerId, Survived = pred_final)
+write.csv(xgbSolution, file = 'sols/xgbOverRiscal.csv', row.names = F, quote = F)
+```
+
