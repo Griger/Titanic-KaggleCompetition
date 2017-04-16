@@ -238,7 +238,7 @@ combi$FamilyID2 <- factor(combi$FamilyID2)
 
 Con esto pasamos a una variable con 22 niveles, lo que hemos hecho es etiquetar con el mismo identificador a todas las familais con un tamaño de 3 miembros o menos. Una vez hemos hecho esto ya podemos pasar a construir nuestro modelo:
 
-```{r}
+```{r, eval=FALSE}
 train <- combi[1:891,]
 test <- combi[892:1309,]
 
@@ -253,7 +253,7 @@ fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + F
 
 Veamos qué variables han tenido más importancia durante la generación del modelo, de los distintos árboles que componenen el model, esto lo podemos hacer ya que hemos especificado el parámetro `importance = TRUE`:
 
-```{r}
+```{r, eval=FALSE}
 varImpPlot(fit)
 ```
 

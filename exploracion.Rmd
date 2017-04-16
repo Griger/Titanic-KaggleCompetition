@@ -1,0 +1,71 @@
+---
+title: "Exploración del conjunto de datos"
+author: "Gustavo Rivas Gervilla"
+date: "16 de abril de 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+```{r includes}
+library(ggplot2)
+```
+
+```{r cargar_datos}
+#cargamos los conjuntos de datos
+train <- read.csv('data/train.csv')
+test <- read.csv('data/test.csv')
+
+cat("Tenemos ", nrow(train), " instancias en el conjunto de entrenamiento.\n")
+cat("Tenemos ", nrow(test), "instancias en el conjunto de test.")
+```
+
+Vamos a ver las variables que tenemos en el conjunto de entrenamiento, señalar que aquí, ignorando lo que se hace en el tutorial de Megan Risdal, se han cargado los conjuntos sin evitar que los atributos que son cadenas de texto se traten como si fueran factores.
+
+```{r ver_vars}
+summary(train)
+```
+
+Es claro que hay algunas variables que se están tratando como factores y que no tiene sentido tratarlas así, como son el camarote del pasajero o su nombre, con lo cual vamos a hacer que pasen a ser simplemente cadenas de texto:
+
+```{r}
+train$Name <- as.character(train$Name); test$Name <- as.character(test$Name)
+train$Cabin <- as.character(train$Cabin); test$Cabin <- as.character(test$Cabin)
+train$Ticket <- as.character(train$Ticket); test$Ticket <- as.character(test$Ticket)
+```
+
+Vamos a ver cuantos valores perdidos tenemos en cada uno de los atributos anteriores:
+
+```{r}
+apply(train, 2, function(x) sum(is.na(x)))
+apply(test, 2, function(x) sum(is.na(x)))
+```
+
+Aquí vemos que la mayoría de valores perdidos están en el atributo **Age**. En el conjunto de test además tenemos un valor perdido en la tarifa pagada por un pasajero. No obstante, a lo largo de los tutoriales hemos podido apreciar que los valores perdidos también pueden venir en forma de cadenas vacías. Con lo cual vamos a tratar de ver en qué medida tenemos esto.
+
+```{r}
+summary(train$Embarked)
+summary(test$Embarked)
+```
+
+Aquí vemos como en el conjunto de train hay dos pasajeros que no tienen un puerto de embarque asociado, ya veremos durante la etapa de preprocesamiento cómo tratamos estos valores para completarlos.
+
+```{r}
+apply(train[, c(4, 9, 11)], 2, function(x) sum(x == "" || x== " "))
+apply(test[, c(3, 8, 10)], 2, function(x) sum(x == "" || x== " "))
+```
+
+Como vemos tanto en el conjunto de test como en el de entranamiento tenemos un *valor perdido* para el camarote del pasajero. Nos ocuparemos de esto también en la etapa de preprocesamiento.
+
+Veamos ahora de forma gráfica el desequilibrio entre las clases, que aunque no es muy acusado trataremos en la fase de preprocesamiento:
+
+```{r mostrando-desequilibrio}
+imbalancedPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = Sex)) + 
+                  scale_x_continuous(breaks = c(0,1), labels = c("0" = "Muertos", "1" = "Sobrevivientes")) +
+                  scale_fill_discrete(name = "Sexo", labels = c("mujer", "hombre"))
+imbalancedPlot
+```
+
+En la gráfica anterior también mostramos en qué proporción sobrevivieron o perecieron hombres y mujeres, esto nos da la información necesaria para poder diseñar el modelo sexista del que se habla en el tutorial de Trevol Stephens.
