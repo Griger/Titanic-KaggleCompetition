@@ -1,0 +1,71 @@
+---
+title: "Prepocesamiento"
+author: "Gustavo Rivas Gervilla"
+date: "17 de abril de 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+```{r includes}
+```
+
+# Preprocesamiento básico
+
+A continuación pasamos a realizar el preprocesamiento que consideramos necesario para mejorar el resultado obtenido por los modelos de clasificación que creemos:
+
+```{r cargar-datos}
+#cargamos los conjuntos de datos
+train <- read.csv('data/train.csv')
+test <- read.csv('data/test.csv')
+```
+
+Algunas variables se han cargado como factores y no tiene sentido tratarlas así ya que se trata de valores prácticamente únicos para cada una de las instancias del datase, con lo cual vamos a pasar estas variables a variables de tipo cadena de caracteres:
+
+```{r quitar-factores}
+train$Name <- as.character(train$Name); test$Name <- as.character(test$Name)
+train$Cabin <- as.character(train$Cabin); test$Cabin <- as.character(test$Cabin)
+train$Ticket <- as.character(train$Ticket); test$Ticket <- as.character(test$Ticket)
+```
+
+Ahoravamos a crear un conjunto que combine los dos conjunto de datos, para poder aplicar algunas transformaciones comunes a ambos a la vez:
+
+```{r}
+test$Survived <- NA
+full <- rbind(train, test)
+```
+
+En primer lugar vamos a obtener el título del pasajero, para ello procesaremos, igual que se hace en los dos tutoriales que se han seguido, las cadenas con el nombre de cada uno de los pasajeros:
+
+```{r}
+full$Title <- sapply(full$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][2]})
+#queremos eliminar el primer espacio del titulo que hemos extraido
+full$Title <- sub(' ', '', full$Title)
+
+table(full$Title)
+```
+
+Ahora bien, como podemos ver obtenemos una gran multitud de títulos distintos, muchos de ellos son equivalente, con lo que tener esta granularidad en este atributo lo único que puede llevarnos es a que nuestros modelos funcionen peor, debido al sobreajuste, o a dar más importancia a esta variable con más niveles que a otras como les ocurre a los árboles de decisión. Por tanto vamos a realizar una agrupación de títulos similares en uno sólo:
+
+```{r}
+full$Title[full$Title %in% c('Don', 'Major', 'Capt', 'Jonkheer', 'Rev', 'Col')] <- 'Mr'
+full$Title[full$Title %in% c('the Countess', 'Mme')] <- 'Mrs'
+full$Title[full$Title %in% c('Mlle', 'Ms')] <- 'Miss'
+full$Title[full$Title == 'Dr' & full$Sex == 'male'] <- 'Mr'
+full$Title[full$Title == 'Dr' & full$Sex == 'female'] <- 'Mrs'
+```
+
+TODO tras tener el id de familia intentaré completar el puerto de embarque con esto
+
+Viendo las dos que son no parece que estoy vaya a dar resultados, ambas fueron en el mismo camarote, ambas pagaron lo mismo, no hay otros pasajeros en el mismo camarote, mismo ticker ni misma tarifa => parece que lo más indicado va a ser darle a estas pasajeras como puerto el de la mayoría sin más...
+
+
+# Limpiar ruido
+
+TODO sobretodo para xgboost
+
+# Equilibrado de clases
+
+TODO esto sólo tiene sentido hacerlo sobre el conjunto de train claro

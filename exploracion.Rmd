@@ -53,8 +53,8 @@ summary(test$Embarked)
 Aquí vemos como en el conjunto de train hay dos pasajeros que no tienen un puerto de embarque asociado, ya veremos durante la etapa de preprocesamiento cómo tratamos estos valores para completarlos.
 
 ```{r}
-apply(train[, c(4, 9, 11)], 2, function(x) sum(x == "" || x== " "))
-apply(test[, c(3, 8, 10)], 2, function(x) sum(x == "" || x== " "))
+apply(train[, c(4, 9, 11)], 2, function(x) sum(x == "" | x== " "))
+apply(test[, c(3, 8, 10)], 2, function(x) sum(x == "" | x== " "))
 ```
 
 Como vemos tanto en el conjunto de test como en el de entranamiento tenemos un *valor perdido* para el camarote del pasajero. Nos ocuparemos de esto también en la etapa de preprocesamiento.
@@ -63,9 +63,21 @@ Veamos ahora de forma gráfica el desequilibrio entre las clases, que aunque no 
 
 ```{r mostrando-desequilibrio}
 imbalancedPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = Sex)) + 
-                  scale_x_continuous(breaks = c(0,1), labels = c("0" = "Muertos", "1" = "Sobrevivientes")) +
-                  scale_fill_discrete(name = "Sexo", labels = c("mujer", "hombre"))
+                  scale_x_continuous(name = "¿Sobrevivió?", breaks = c(0,1), labels = c("0" = "No", "1" = "Sí")) +
+                  scale_fill_manual(name = "Sexo", labels = c("mujer", "hombre"), values =  c("khaki3", "rosybrown4"))                   + ylab("#pasajeros")
 imbalancedPlot
 ```
 
 En la gráfica anterior también mostramos en qué proporción sobrevivieron o perecieron hombres y mujeres, esto nos da la información necesaria para poder diseñar el modelo sexista del que se habla en el tutorial de Trevol Stephens.
+
+TODO todo se va a referir a la superviviencia
+TODO distribución tarifa en muertos y no muertos
+
+```{r distro-clases}
+clasesPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = as.factor(Pclass))) +
+              scale_x_continuous(name = "¿Sobrevivió?", breaks = c(0,1), labels = c("0" = "No", "1" = "Sí")) +
+              scale_fill_manual(name = "Clase", labels = c("primera", "segunda", "tercera"), values =  c("khaki1", "lemonchiffon4", "indianred")) +
+              ylab("#pasajeros")
+          
+clasesPlot
+```
