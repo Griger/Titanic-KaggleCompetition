@@ -165,7 +165,7 @@ set.seed(129)
 mice_mod <- mice(full[, !names(full) %in% c('PassengerId','Name','Ticket','Cabin','Family','Surname','Survived')], method='rf') 
 ```
 
-Aquí se están imputando todas las dos variables que presentan valores perdidos que ya hemos mencionado usando partición recursiva para regresión (la edad se puede considerar un atributo continuo al tener tanta granularidad en sus valores), la expresión lógica que empleamos es para que no se use en el modelo predictivo aquellas variables que no consideramos útiles para tal propósito. Vamos a ver a continuación la distribución de edades en el dataset original y en el devuelto por `mice` para ver que tienen cierta consonancia y que la imputación no ha distorsionado los datos:
+Aquí se están imputando las dos variables que presentan valores perdidos que ya hemos mencionado usando partición recursiva para regresión (la edad se puede considerar un atributo continuo al tener tanta granularidad en sus valores), la expresión lógica que empleamos es para que no se use en el modelo predictivo aquellas variables que no consideramos útiles para tal propósito. Vamos a ver a continuación la distribución de edades en el dataset original y en el devuelto por `mice` para ver que tienen cierta consonancia y que la imputación no ha distorsionado los datos:
 
 ```{r}
 mice_output <- complete(mice_mod)

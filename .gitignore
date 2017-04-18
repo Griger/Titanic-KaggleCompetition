@@ -34,3 +34,4 @@ vignettes/*.pdf
 
 *.pdf
 !imgs/*
+build

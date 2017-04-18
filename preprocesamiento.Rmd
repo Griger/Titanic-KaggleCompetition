@@ -1,15 +1,16 @@
 ---
-title: "Prepocesamiento"
+title: "Etapa de preprocesamiento"
 author: "Gustavo Rivas Gervilla"
 date: "17 de abril de 2017"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
 ```
 
 ```{r includes}
+library(mice)
 ```
 
 # Preprocesamiento básico
@@ -49,7 +50,7 @@ table(full$Title)
 
 Ahora bien, como podemos ver obtenemos una gran multitud de títulos distintos, muchos de ellos son equivalente, con lo que tener esta granularidad en este atributo lo único que puede llevarnos es a que nuestros modelos funcionen peor, debido al sobreajuste, o a dar más importancia a esta variable con más niveles que a otras como les ocurre a los árboles de decisión. Por tanto vamos a realizar una agrupación de títulos similares en uno sólo:
 
-```{r}
+```{r titulo}
 full$Title[full$Title %in% c('Don', 'Major', 'Capt', 'Jonkheer', 'Rev', 'Col')] <- 'Mr'
 full$Title[full$Title %in% c('the Countess', 'Mme')] <- 'Mrs'
 full$Title[full$Title %in% c('Mlle', 'Ms')] <- 'Miss'
@@ -57,9 +58,84 @@ full$Title[full$Title == 'Dr' & full$Sex == 'male'] <- 'Mr'
 full$Title[full$Title == 'Dr' & full$Sex == 'female'] <- 'Mrs'
 ```
 
-TODO tras tener el id de familia intentaré completar el puerto de embarque con esto
+Ahora vamos a crear una nueva variable en la que recoges el tamaño de la familia del pasejero que iba también a bordo en el titanic, el uso de esta variable se debe a que es probable que familias muy grandes a bordo lo tuviesen más complicado para ser evacudas, y ante la negación de los familiares a dejar atrás a sus maridos o hermanos, entonces finalmente perecieran todos.
 
-Viendo las dos que son no parece que estoy vaya a dar resultados, ambas fueron en el mismo camarote, ambas pagaron lo mismo, no hay otros pasajeros en el mismo camarote, mismo ticker ni misma tarifa => parece que lo más indicado va a ser darle a estas pasajeras como puerto el de la mayoría sin más...
+```{r tamanio-familia}
+full$FamilySize <- full$SibSp + full$Parch + 1
+```
+
+Vamos a fabricar también un identificador de la familia de cada pasajero, esto lo hacemos combinando el apellido del pasajero junto con el número de familiares a bordo del Titanic. Esta la combinación la hacemos para evitar que dos personas que pertenencen a familias distintas pero que tengan el mismo apellido sean consideradas como miembros de la misma familia. Es claro que aún así pueden darse casos en los que estemos mezclando familiares de dos familias distintas, pero es una buena aproximación.
+
+```{r id-familia}
+full$Surname <- sapply(full$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][1]})
+full$FamilyID <- paste(as.character(full$FamilySize), full$Surname, sep="")
+full$FamilyID[full$FamilySize <= 2] <- 'Small'
+```
+
+Fijémonos en que hemos agrupado todas las familias de 2 miembros o menos en un único identificador, esto se basa en la suposición que hacíamos anteriormente, son las familias grandes las que más complicaciones tendrían para ser evacuadas. Esto concuerda con lo que vimos en la sección de exploración, aquellos que viajaban solos tenían más posibilidades de morir, aunque quizás sí que penaliza a las familias de dos miembros.
+
+TODO Arreglando los ID de las familias:
+
+```{r}
+famIDs <- data.frame(table(full$FamilyID))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+full$FamilyID[full$FamilyID %in% famIDs$Var1] <- 'Small'
+full$FamilyID <- factor(full$FamilyID)
+```
+
+
+Ahora vamos a tratar de completar los **valores perdidos** para el atributo con el puerto desde el que embarcaron los pasajeros, son dos las instancias afectadas en este caso. Veamos cuáles son las dos instanacias que presentan este problema:
+
+```{r}
+full[full$Embarked == '',]
+```
+
+Como podemos ver ambas personas pagaron lo mismo por su billete, éste tiene el mismo identificador y ambas viajaron en el mismo camarote, con lo cual hes lógico pensar que el puerto de embarque de ambas fue el mismo. No obstante ninguna tiene otro familiar a bordo a partir del cual podamos deducir en qué puerto embarcaron. Con lo cual lo que decidimos es darles a ambas como puerto el más frecuente, Southhampton. Ademas si obtenemos la medida de la tarifa pagada por los pasajeros de primera clase que embarcaron desde ese puerto tenemos que es de aproximadamente 72$ con lo que el hecho de que ambas pasajeras pagasen 80$ no resulta inconsistente con nuestra elección.
+
+```{r}
+mean(full[full$Pclass == 1 & full$Embarked == 'S',]$Fare)
+
+full[c(62,830),]$Embarked <- 'S'
+full$Embarked <- factor(full$Embarked)
+```
+
+La última instrucción del código anterior es necesaria para actualizar los niveles del factor **Embarked**, en otro caso seguiríamos teniendo la cadena vacía como un nivel más del factor.
+
+A continuación pasamos a imputar el único que valor perdido que tenemos para el atributo **Fare**, para ello seguiremos las indicaciones del tutorial de Megan Risdal en el cual se le asigna al pasajero la media de lo que pagaron otros pasajeros en sus mismas condiciones:
+
+```{r}
+full$Fare[1044] <- median(full[full$Pclass == '3' & full$Embarked == 'S', ]$Fare, na.rm = TRUE)
+```
+
+Ahora vamos usar el método `mice` haciendo uso del algoritmo Random Forest para imputar los valores perdidos en el atributo `Age`. En este atributo tenemos 263 valores perdido en total con lo que emplear un método más sofisticado de imputación para más adecuado que asingar por ejemplo la media de edad de los pasajeros.
+
+Observemos que en la llamada al método hacemos que se ignoren algunas variables que no consideramos relevantes para la edad del pasajero, también excluimos el atributo `Survived` ya que las instancias del conjunto de test no disponen de tal información.
+
+```{r results="hide"}
+set.seed(129)
+mice_mod <- mice(full[, !names(full) %in% c('PassengerId','Name','Ticket','Cabin','FamilyID','Surname','Survived')], method='rf')
+
+full$Age <- complete(mice_mod)$Age
+```
+
+A partir de la edad vamos a crear un nuevo atributo que nos diga si un pasajero es adulto o no, considerando adulto a partir de los 18 años:
+
+```{r}
+full$Child <- ifelse(full$Age < 18, 'Child', 'Adult'); full$Child <- as.factor(full$Child)
+```
+
+Finalmente vamos a crear una variable que nos indique si una pasajera es o no madre, esto lo hacemos ya que es posible que se le diese prioridad a mujeres acompañadas de niños, probablemente serian sus madres:
+
+```{r}
+full$Mother <- ifelse(full$Sex == 'female' & full$Parch > 0 & full$Age > 18 & full$Title != 'Miss', 'Mother', 'Not Mother')
+full$Mother <- as.factor(full$Mother)
+```
+
+Guardamos los conjuntos de entrenamiento y test obtenidos tras esta etapa de preprocesamiento para su posterior uso en la fase de clasificación con diversos modelos distintos:
+
+```{r}
+write.csv(full, file = 'data/fullPreproBasico.csv', row.names = F, quote = T)
+```
 
 
 # Limpiar ruido

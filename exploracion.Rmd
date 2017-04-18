@@ -1,5 +1,5 @@
 ---
-title: "Exploración del conjunto de datos"
+title: "Etapa de exploración"
 author: "Gustavo Rivas Gervilla"
 date: "16 de abril de 2017"
 output: pdf_document
@@ -72,7 +72,8 @@ En la gráfica anterior también mostramos en qué proporción sobrevivieron o p
 
 TODO todo se va a referir a la superviviencia
 TODO distribución tarifa en muertos y no muertos
-
+TODO gráfica de distro de muertes según tam. de familia.
+TOODO distro muertes según edad.
 ```{r distro-clases}
 clasesPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = as.factor(Pclass))) +
               scale_x_continuous(name = "¿Sobrevivió?", breaks = c(0,1), labels = c("0" = "No", "1" = "Sí")) +

@@ -1,0 +1,38 @@
+---
+title: "Etapa de clasificación"
+author: "Gustavo Rivas Gervilla"
+date: "18 de abril de 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
+```
+
+```{r}
+library(party)
+```
+
+```{r}
+full <- read.csv('data/fullPreproBasico.csv')
+
+train <- full[1:891,]
+test <- full[892:1309,]
+```
+
+```{r}
+varsIgnoradas <- c(1,4,9,11,15)
+trainFiltrado = train[,-varsIgnoradas]
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ .,
+                 data = trainFiltrado, 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+```
+
+```{r}
+testFiltrado <- test[,-varsIgnoradas]
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+cforestSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(cforestSolution, file = 'sols/cforestPreproBasico.csv', row.names = F, quote = F)
+```
+
