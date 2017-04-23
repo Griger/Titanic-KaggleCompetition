@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
 
 ```{r includes}
 library(mice)
+library(rpart)
 ```
 
 # Preprocesamiento básico
@@ -51,11 +52,19 @@ table(full$Title)
 Ahora bien, como podemos ver obtenemos una gran multitud de títulos distintos, muchos de ellos son equivalente, con lo que tener esta granularidad en este atributo lo único que puede llevarnos es a que nuestros modelos funcionen peor, debido al sobreajuste, o a dar más importancia a esta variable con más niveles que a otras como les ocurre a los árboles de decisión. Por tanto vamos a realizar una agrupación de títulos similares en uno sólo:
 
 ```{r titulo}
-full$Title[full$Title %in% c('Don', 'Major', 'Capt', 'Jonkheer', 'Rev', 'Col')] <- 'Mr'
-full$Title[full$Title %in% c('the Countess', 'Mme')] <- 'Mrs'
-full$Title[full$Title %in% c('Mlle', 'Ms')] <- 'Miss'
-full$Title[full$Title == 'Dr' & full$Sex == 'male'] <- 'Mr'
-full$Title[full$Title == 'Dr' & full$Sex == 'female'] <- 'Mrs'
+#agrupamiento de titulos segun el tutorial de ingenieria de caracteristicas de Kaggle
+# full$Title[full$Title %in% c('Don', 'Major', 'Capt', 'Jonkheer', 'Rev', 'Col')] <- 'Mr'
+# full$Title[full$Title %in% c('the Countess', 'Mme')] <- 'Mrs'
+# full$Title[full$Title %in% c('Mlle', 'Ms')] <- 'Miss'
+# full$Title[full$Title == 'Dr' & full$Sex == 'male'] <- 'Mr'
+# full$Title[full$Title == 'Dr' & full$Sex == 'female'] <- 'Mrs'
+
+#agrupamiento de titulos de Trevor Stephens
+full$Title[full$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
+full$Title[full$Title %in% c('Capt', 'Don', 'Major', 'Sir')] <- 'Sir'
+full$Title[full$Title %in% c('Dona', 'Lady', 'the Countess', 'Jonkheer')] <- 'Lady'
+
+full$Title <- factor(full$Title)
 ```
 
 Ahora vamos a crear una nueva variable en la que recoges el tamaño de la familia del pasejero que iba también a bordo en el titanic, el uso de esta variable se debe a que es probable que familias muy grandes a bordo lo tuviesen más complicado para ser evacudas, y ante la negación de los familiares a dejar atrás a sus maridos o hermanos, entonces finalmente perecieran todos.
@@ -112,10 +121,18 @@ Ahora vamos usar el método `mice` haciendo uso del algoritmo Random Forest para
 Observemos que en la llamada al método hacemos que se ignoren algunas variables que no consideramos relevantes para la edad del pasajero, también excluimos el atributo `Survived` ya que las instancias del conjunto de test no disponen de tal información.
 
 ```{r results="hide"}
-set.seed(129)
-mice_mod <- mice(full[, !names(full) %in% c('PassengerId','Name','Ticket','Cabin','FamilyID','Surname','Survived')], method='rf')
+#Imputacion de la edad de Megan Risdal
+# set.seed(129)
+# mice_mod <- mice(full[, !names(full) %in% c('PassengerId','Name','Ticket','Cabin','FamilyID','Surname','Survived')], method='rf')
+# 
+# full$Age <- complete(mice_mod)$Age
 
-full$Age <- complete(mice_mod)$Age
+#Imputacion de la edad de Trevor Stephens
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Title + FamilySize,
+                  data=full[!is.na(full$Age),], 
+                  method="anova")
+
+full$Age[is.na(full$Age)] <- predict(Agefit, full[is.na(full$Age),])
 ```
 
 A partir de la edad vamos a crear un nuevo atributo que nos diga si un pasajero es adulto o no, considerando adulto a partir de los 18 años:
@@ -134,7 +151,7 @@ full$Mother <- as.factor(full$Mother)
 Guardamos los conjuntos de entrenamiento y test obtenidos tras esta etapa de preprocesamiento para su posterior uso en la fase de clasificación con diversos modelos distintos:
 
 ```{r}
-write.csv(full, file = 'data/fullPreproBasico.csv', row.names = F, quote = T)
+write.csv(full, file = 'data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv', row.names = F, quote = T)
 ```
 
 

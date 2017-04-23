@@ -14,14 +14,14 @@ library(party)
 ```
 
 ```{r}
-full <- read.csv('data/fullPreproBasico.csv')
+full <- read.csv('data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv')
 
 train <- full[1:891,]
 test <- full[892:1309,]
 ```
 
 ```{r}
-varsIgnoradas <- c(1,4,9,11,15)
+varsIgnoradas <- c(1,4,9,11,15,17,18)
 trainFiltrado = train[,-varsIgnoradas]
 set.seed(415)
 fit <- cforest(as.factor(Survived) ~ .,
@@ -33,6 +33,19 @@ fit <- cforest(as.factor(Survived) ~ .,
 testFiltrado <- test[,-varsIgnoradas]
 Prediction <- predict(fit, test, OOB=TRUE, type = "response")
 cforestSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
-write.csv(cforestSolution, file = 'sols/cforestPreproBasico.csv', row.names = F, quote = F)
+write.csv(cforestSolution, file = 'sols/cforestPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv', row.names = F, quote = F)
 ```
 
+Cuando no uso las variables Child ni Mother acompañadas del preprocesamiento básico: 0.80861 mejor que con ellas.
+Cambiando el preprocesamiento básico para que el agrupamiento de los títulos se haga como lo hace Stephens e ignorando también las variables Child y Mother tenemos: 0.80383 algo peor que con el otro preprocesamiento de título.
+Al hacer la imputación de la edad con un rpart como Stephens volvemos a tener la misma puntuación que con el tutorial de Stephens, al fin y al cabo poco estamos cambiando de este tutorial en el preprocesamiento, más que la imputación en el NA del Fare: 0.81340
+
+```{r}
+fit <- rpart(Survived ~ ., data=trainFiltrado, method="class")
+
+Prediction <- predict(fit, testFiltrado, type = "class")
+rpartSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(rpartSolution, file = 'sols/rpartPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv', row.names = F, quote = F)
+```
+
+Con rpart y lo mismo que antes como conjuntos obtenemos 0.79426 que era justo lo que obtenía Stephens, claro estamos con el mismo conjunto que él básicamente.
