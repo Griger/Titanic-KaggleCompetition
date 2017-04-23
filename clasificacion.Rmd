@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
 
 ```{r}
 library(party)
+library(xgboost)
 ```
 
 ```{r}
@@ -49,3 +50,40 @@ write.csv(rpartSolution, file = 'sols/rpartPreproBasicoSinChildNiMotherConTitulo
 ```
 
 Con rpart y lo mismo que antes como conjuntos obtenemos 0.79426 que era justo lo que obtenía Stephens, claro estamos con el mismo conjunto que él básicamente.
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[,predictorsNames]),label=trainFiltrado$Survived)
+dtest<-data.matrix(testFiltrado[,predictorsNames])
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+nround  = 50 #use 3000 he comentado los parametros anteriores #200
+set.seed(2045)
+clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+
+pred <- predict(clf, dtest)
+pred_final <- ifelse(pred>0.5,1,0)
+
+xgbSolution <- data.frame(PassengerID = test$PassengerId, Survived = pred_final)
+write.csv(xgbSolution, file = 'sols/xgbPreproBasicoSinChildNiMotherConTituloyEdaddeStephensSIMPLE50.csv', row.names = F, quote = F)
+```
+
+Enlace consultado para el codigo anterior: https://www.kaggle.com/varun2145/titanic/xgboost-hypertuned/code Obtengo una puntuacion mucho mas baja  0.71292 probablemente por sobre ajuste.
+
+Al bajar a 30 iteraciones ya bajo el score a 0.80383.
+
+TODO los siguientes experimentos con balanceo de carga y tal seran con estos parametros que empatan con el random forest.
+
+Usando unos parametros mas simples, que parecen obtener un modelo menos complejo, entonces obtengo 0.72249
+
+Simplificando aun mas el numero de iteraciones que se dan en el algoritmo y bajando el eta de 0.3 a 0.001 para que el model sea menos conservativo, TODO creo, obtengo la misma puntuacion que con el tutorial de Trevor 0.81340.
+
+
+
