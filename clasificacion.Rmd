@@ -72,7 +72,7 @@ pred <- predict(clf, dtest)
 pred_final <- ifelse(pred>0.5,1,0)
 
 xgbSolution <- data.frame(PassengerID = test$PassengerId, Survived = pred_final)
-write.csv(xgbSolution, file = 'sols/xgbPreproBasicoSinChildNiMotherConTituloyEdaddeStephensSIMPLE50.csv', row.names = F, quote = F)
+write.csv(xgbSolution, file = 'sols/xgbPreproFijado.csv', row.names = F, quote = F)
 ```
 
 Enlace consultado para el codigo anterior: https://www.kaggle.com/varun2145/titanic/xgboost-hypertuned/code Obtengo una puntuacion mucho mas baja  0.71292 probablemente por sobre ajuste.
@@ -86,4 +86,166 @@ Usando unos parametros mas simples, que parecen obtener un modelo menos complejo
 Simplificando aun mas el numero de iteraciones que se dan en el algoritmo y bajando el eta de 0.3 a 0.001 para que el model sea menos conservativo, TODO creo, obtengo la misma puntuacion que con el tutorial de Trevor 0.81340.
 
 
+```{r}
+rpartSol <- read.csv('sols/rpartPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv')
+randomForestSol <- read.csv('sols/cforestPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv')
+xgbSol <- read.csv('sols/xgbPreproBasicoSinChildNiMotherConTituloyEdaddeStephensSIMPLE50.csv')
 
+ensambleSum <- rpartSol$Survived + randomForestSol$Survived + xgbSol$Survived
+
+ensambleSol <- ifelse(ensambleSum > 1, 1, 0)
+ensambleSol <- data.frame(PassengerID = test$PassengerId, Survived = ensambleSol)
+write.csv(ensambleSol, file = 'sols/ensambleBasico.csv', row.names = F, quote = F)
+```
+
+Con este ensamble obtenemos peor puntuación que con xgboost o randomForest por separado: 0.80861.
+
+# Clasificación con balanceo de carga
+
+## Undersampling
+
+```{r}
+fullDown <- read.csv('data/fullDownPreproFijado.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullDown)
+
+train <- fullDown[1 : (nRows - nTestRows), ]
+test <- fullDown[(nRows - nTestRows + 1) : nRows,]
+```
+
+### cforest
+
+```{r}
+varsIgnoradas <- c(1,4,9,11,15,17,18)
+trainFiltrado = train[,-varsIgnoradas]
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ .,
+                 data = trainFiltrado, 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+```
+
+```{r}
+testFiltrado <- test[,-varsIgnoradas]
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+cforestSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(cforestSolution, file = 'sols/cforestPreproFijadoDownSampling.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.79426 baja
+
+### rpart
+
+```{r}
+fit <- rpart(Survived ~ ., data=trainFiltrado, method="class")
+
+Prediction <- predict(fit, testFiltrado, type = "class")
+rpartSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(rpartSolution, file = 'sols/rpartPreproFijadoDownSampling.csv', row.names = F, quote = F)
+```
+ 
+Puntuacion: 0.78947 baja
+
+### xgboost
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[,predictorsNames]),label=trainFiltrado$Survived)
+dtest<-data.matrix(testFiltrado[,predictorsNames])
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+nround  = 50 #use 3000 he comentado los parametros anteriores #200
+set.seed(2045)
+clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+
+pred <- predict(clf, dtest)
+pred_final <- ifelse(pred>0.5,1,0)
+
+xgbSolution <- data.frame(PassengerID = test$PassengerId, Survived = pred_final)
+write.csv(xgbSolution, file = 'sols/xgbPreproFijadoDownSampling.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.77990 baja mucho todo con respecto al mismo algoritmo con el conjunto sin balancear
+
+## Oversampling
+
+```{r}
+fullUp <- read.csv('data/fullUpPreproFijado.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullUp)
+
+train <- fullUp[1 : (nRows - nTestRows), ]
+test <- fullUp[(nRows - nTestRows + 1) : nRows,]
+```
+
+### cforest
+
+```{r}
+varsIgnoradas <- c(1,4,9,11,15,17,18)
+trainFiltrado = train[,-varsIgnoradas]
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ .,
+                 data = trainFiltrado, 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+```
+
+```{r}
+testFiltrado <- test[,-varsIgnoradas]
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+cforestSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(cforestSolution, file = 'sols/cforestPreproFijadoUpSampling.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.78469 baja y baja con respecto a undersampling (por el solapamiento de clases ??)
+
+### rpart
+
+```{r}
+fit <- rpart(Survived ~ ., data=trainFiltrado, method="class")
+
+Prediction <- predict(fit, testFiltrado, type = "class")
+rpartSolution <- data.frame(PassengerID = test$PassengerId, Survived = Prediction)
+write.csv(rpartSolution, file = 'sols/rpartPreproFijadoUpSampling.csv', row.names = F, quote = F)
+```
+ 
+Puntuacion: 0.73684 baja y baja respecto al undersampling
+
+### xgboost
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[,predictorsNames]),label=trainFiltrado$Survived)
+dtest<-data.matrix(testFiltrado[,predictorsNames])
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+nround  = 50 #use 3000 he comentado los parametros anteriores #200
+set.seed(2045)
+clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+
+pred <- predict(clf, dtest)
+pred_final <- ifelse(pred>0.5,1,0)
+
+xgbSolution <- data.frame(PassengerID = test$PassengerId, Survived = pred_final)
+write.csv(xgbSolution, file = 'sols/xgbPreproFijadoUpSampling.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.76555 baja y también respecto al undersampling
+
+## Smote
+
+TODO

@@ -186,12 +186,22 @@ test <- full[892:1309,]
 
 ```{r}
 downTrain <- downSample(train, as.factor(train$Survived))
+downTrain <- downTrain[,-ncol(downTrain)]
+
+fullDown <- rbind(downTrain, test)
+
+write.csv(fullDown, file = 'data/fullDownPreproFijado.csv', row.names = F, quote = T)
 ```
 
 ## Oversampling
 
 ```{r}
 upTrain <- upSample(train, as.factor(train$Survived))
+upTrain <- upTrain[,-ncol(upTrain)]
+
+fullUp <- rbind(upTrain, test)
+
+write.csv(fullUp, file = 'data/fullUpPreproFijado.csv', row.names = F, quote = T)
 ```
 
 
