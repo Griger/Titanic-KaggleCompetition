@@ -12,6 +12,8 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
 ```{r includes}
 library(mice)
 library(rpart)
+library(caret) #undersampling y oversampling
+library(DMwR) #smote
 ```
 
 # Preprocesamiento básico
@@ -161,4 +163,50 @@ TODO sobretodo para xgboost
 
 # Equilibrado de clases
 
-TODO esto sólo tiene sentido hacerlo sobre el conjunto de train claro
+```{r}
+# Sub-sampling
+down_train <- downSample(training, training$Class)
+table(down_train$Class)
+
+up_train <- upSample(training, training$Class)
+table(up_train$Class)
+
+smote_train <- SMOTE(Class ~ ., data  = training)  
+table(smote_train$Class) 
+```
+
+```{r}
+full <- read.csv('data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv')
+
+train <- full[1:891,]
+test <- full[892:1309,]
+```
+
+## Undersampling
+
+```{r}
+downTrain <- downSample(train, as.factor(train$Survived))
+```
+
+## Oversampling
+
+```{r}
+upTrain <- upSample(train, as.factor(train$Survived))
+```
+
+
+## SMOTE
+
+```{r}
+
+TODO quitar variables inutiles
+TODO discretizar la familia
+TODO dummyVars
+TODO quitar de las que vienen las anteriores
+
+train$Survived <- as.factor(train$Survived)
+smoteTrain <- SMOTE(Survived ~ -PassengerId -Name -Ticket -Cabin -Surname, data  = train)
+
+TODO quitar dummyVars
+```
+
