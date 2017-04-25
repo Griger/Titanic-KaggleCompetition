@@ -14,6 +14,7 @@ library(mice)
 library(rpart)
 library(caret) #undersampling y oversampling
 library(DMwR) #smote
+library(NoiseFiltersR) #limpieza de ruido
 ```
 
 # Preprocesamiento básico
@@ -156,11 +157,6 @@ Guardamos los conjuntos de entrenamiento y test obtenidos tras esta etapa de pre
 write.csv(full, file = 'data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv', row.names = F, quote = T)
 ```
 
-
-# Limpiar ruido
-
-TODO sobretodo para xgboost
-
 # Equilibrado de clases
 
 ```{r}
@@ -258,3 +254,27 @@ fullSmote <- fullSmote[, -4]
 write.csv(fullSmote, file = 'data/fullSMOTE.csv', row.names = F, quote = T)
 ```
 
+# Limpiar ruido
+
+##IPF
+
+```{r}
+fullSMOTE <- read.csv('data/fullSMOTE.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullSMOTE)
+
+train <- fullSMOTE[1 : (nRows - nTestRows), ]
+test <- fullSMOTE[(nRows - nTestRows + 1) : nRows,]
+```
+
+```{r}
+train$Survived <- as.factor(train$Survived)
+noise_filter <- IPF(Survived ~ ., data = train)
+
+trainWithoutNoise <- noise_filter$cleanData
+
+fullCleaned <- rbind(trainWithoutNoise, test)
+
+write.csv(fullCleaned, file = 'data/fullSMOTEandIPF.csv', row.names = F, quote = T)
+```
