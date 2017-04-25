@@ -83,7 +83,7 @@ TODO los siguientes experimentos con balanceo de carga y tal seran con estos par
 
 Usando unos parametros mas simples, que parecen obtener un modelo menos complejo, entonces obtengo 0.72249
 
-Simplificando aun mas el numero de iteraciones que se dan en el algoritmo y bajando el eta de 0.3 a 0.001 para que el model sea menos conservativo, TODO creo, obtengo la misma puntuacion que con el tutorial de Trevor 0.81340.
+Simplificando aun mas el numero de iteraciones que se dan en el algoritmo y bajando el eta de 0.3 a 0.001 para que el model sea menos conservativo, TODO creo, obtengo la misma puntuacion que con el tutorial de Trevor 0.81340. Y no es justamente el mismo resultado que con Trevor, difieren en 13 predicciones.
 
 
 ```{r}
@@ -248,4 +248,70 @@ Puntuacion: 0.76555 baja y también respecto al undersampling
 
 ## Smote
 
-TODO
+```{r}
+fullSMOTE <- read.csv('data/fullSMOTE.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullSMOTE)
+
+train <- fullSMOTE[1 : (nRows - nTestRows), ]
+test <- fullSMOTE[(nRows - nTestRows + 1) : nRows,]
+testPassengerId <- 892:1309
+```
+
+### cforest
+
+```{r}
+set.seed(415)
+fit <- cforest(as.factor(Survived) ~ .,
+                 data = train, 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+```
+
+```{r}
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+cforestSolution <- data.frame(PassengerID = testPassengerId, Survived = Prediction)
+write.csv(cforestSolution, file = 'sols/cforestSMOTE.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.80383 mejor que los otros dos balanceos pero peor que sin balancear
+
+### rpart
+
+```{r}
+fit <- rpart(Survived ~ ., data=train, method="class")
+
+Prediction <- predict(fit, test, type = "class")
+rpartSolution <- data.frame(PassengerID = testPassengerId, Survived = Prediction)
+write.csv(rpartSolution, file = 'sols/rpartSMOTE.csv', row.names = F, quote = F)
+```
+ 
+Puntuacion: 0.77512 mejor que up peor que sub, peor que el original
+
+### xgboost
+
+```{r}
+predictorsNames = names(train)[names(train) != 'Survived'] #names of columns after data conversion
+dtrain<-xgb.DMatrix(data=data.matrix(train[,predictorsNames]),label=train$Survived)
+dtest<-data.matrix(test[,predictorsNames])
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+nround  = 50 #use 3000 he comentado los parametros anteriores #200
+set.seed(2045)
+clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+
+pred <- predict(clf, dtest)
+pred_final <- ifelse(pred>0.5,1,0)
+
+xgbSolution <- data.frame(PassengerID = testPassengerId, Survived = pred_final)
+write.csv(xgbSolution, file = 'sols/xgbSMOTE.csv', row.names = F, quote = F)
+```
+
+Puntuacion: 0.79426 mejor que con los otros dos balanceos pero peor que el original

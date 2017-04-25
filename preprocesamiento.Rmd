@@ -164,18 +164,6 @@ TODO sobretodo para xgboost
 # Equilibrado de clases
 
 ```{r}
-# Sub-sampling
-down_train <- downSample(training, training$Class)
-table(down_train$Class)
-
-up_train <- upSample(training, training$Class)
-table(up_train$Class)
-
-smote_train <- SMOTE(Class ~ ., data  = training)  
-table(smote_train$Class) 
-```
-
-```{r}
 full <- read.csv('data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv')
 
 train <- full[1:891,]
@@ -207,16 +195,66 @@ write.csv(fullUp, file = 'data/fullUpPreproFijado.csv', row.names = F, quote = T
 
 ## SMOTE
 
+Las transformaciones siguientes las voy a hacer sobre full, supongo que el dataset está bien y que por tanto los conjuntos de test y de train siguen la misma distribución, de este modo normalizar los dos conjuntos unidos no debería ser contraproducente.
+
 ```{r}
 
-TODO quitar variables inutiles
-TODO discretizar la familia
-TODO dummyVars
-TODO quitar de las que vienen las anteriores
+#eliminamos las variables que no utilizaremos en la clasificacion
+ignoredVars <- c("PassengerId", "Name", "Ticket", "Cabin", "Surname", "FamilyID", "Child", "Mother")
+filteredFull <- full[, ! names(full) %in% ignoredVars]
 
+#discretizamos el ID familia segun tamanio de la misma (basamos en grafica Risdal)
+filteredFull$FamilyType <- "Small"
+filteredFull[filteredFull$FamilySize <= 3 & filteredFull$FamilySize <= 4, ]$FamilyType <- "Medium"
+filteredFull[filteredFull$FamilySize > 4, ]$FamilyType <- "Big"
+filteredFull$FamilyType <- as.factor(filteredFull$FamilyType)
+
+#pasamos da variables categoricas a array de binarias http://amunategui.github.io/dummyVar-Walkthrough/
+
+dmy <- dummyVars(" ~ .", data = filteredFull)
+filteredFull <- data.frame(predict(dmy, newdata = filteredFull))
+
+#normalizamos al [0,1] el resto del variable
+
+preProc <- preProcess(filteredFull, method = "range")
+filteredFull <- predict(preProc, filteredFull)
+
+train <- filteredFull[1:891,]
+test <- filteredFull[892:1309,]
+
+#aplicamos SMOTE
 train$Survived <- as.factor(train$Survived)
-smoteTrain <- SMOTE(Survived ~ -PassengerId -Name -Ticket -Cabin -Surname, data  = train)
+smoteTrain <- SMOTE(Survived ~ ., data  = train, perc.over = 200, perc.under = 150)
+#nrow(smoteTrain[smoteTrain$Survived == 0, ])/nrow(smoteTrain[smoteTrain$Survived == 1,])
+#nrow(smoteTrain)
 
-TODO quitar dummyVars
+#recuperamos algunas categoricas
+fullSmote <- rbind(smoteTrain, test)
+
+titles <- c("Col", "Dr", "Lady", "Master", "Miss", "Mlle", "Mr", "Mrs", "Ms", "Rev", "Sir")
+titleIDs <- apply(fullSmote[,12:22], 1, function(x) x %*% 1:11)
+fullSmote$Title <- titles[titleIDs]
+fullSmote$Title <- as.factor(fullSmote$Title)
+
+fullSmote <- fullSmote[, -c(12:22)]
+
+ports <- c("C", "Q", "S")
+portIDs <- apply(fullSmote[, 9:11], 1, function(x) x %*% 1:3)
+fullSmote$Embarked <- ports[portIDs]
+fullSmote$Embarked <- as.factor(fullSmote$Embarked)
+
+fullSmote <- fullSmote[, -c(9:11)]
+
+familyTypes <- c("Big", "Medium", "Small")
+famTypeIDs <- apply(fullSmote[, 10:12], 1, function(x) x %*% 1:3)
+fullSmote$FamilyType <- familyTypes[famTypeIDs]
+fullSmote$FamilyType <- as.factor(fullSmote$FamilyType)
+
+fullSmote <- fullSmote[, -c(10:12)]
+
+#Elimino la variable que indica si un pasajero es hombre
+fullSmote <- fullSmote[, -4]
+
+write.csv(fullSmote, file = 'data/fullSMOTE.csv', row.names = F, quote = T)
 ```
 
