@@ -86,7 +86,7 @@ full$FamilyID[full$FamilySize <= 2] <- 'Small'
 
 Fijémonos en que hemos agrupado todas las familias de 2 miembros o menos en un único identificador, esto se basa en la suposición que hacíamos anteriormente, son las familias grandes las que más complicaciones tendrían para ser evacuadas. Esto concuerda con lo que vimos en la sección de exploración, aquellos que viajaban solos tenían más posibilidades de morir, aunque quizás sí que penaliza a las familias de dos miembros.
 
-TODO Arreglando los ID de las familias:
+Dado que el número de identificadores de las familias es muy elevado decidimos agrupar las familias de 2 miembros o uno en un sólo identificador. De este modo no tenemos excesiva granularidad, cosa que puede dar errores en algunos algoritmos como el Random Forest del paquere Random Forest.
 
 ```{r}
 famIDs <- data.frame(table(full$FamilyID))

@@ -36,8 +36,6 @@ full <- bind_rows(train, test)
 
 Lo que hemos hecho con el método `bind_rows` del paquete **dplyr** es combinar los dos datasets en uno sólo. Podemos pensar en que para este propósito nos valdría con emplear el método `rbind`, el problema es que el conjunto de test no dispone (como es de esperar) de la columna *Survived* y en ese caso este método nos daría un error. En cambio usando `bind_rows` los unimos sin problemas ya que el propio método se encarga de añadir el valor **NA** en aquellos valores que sean necesarios para unir ambos datasets, en este caso el atributo a predecir.
 
-TODO: añadir la descripción del dataset, ya escrita en el portátil.
-
 # Ingeniería de características
 
 Vamos ahora a trabajar con los datos de los que disponemos para tratar de prepararlos de modo que sean más útiles de cara a un futuro modelo de clasificación que queramos emplear. Si empleamos el método `View` sobre el dataset `full` el nombre de cada pasejero viene acompañado de un título, como puede ser *Mr.* o *Miss*. Lo que se pretende con el siguiente código es extraer estos títulos a una nueva columna. El nombre del pasajero en un principio no parece ser algo determinante para que el pasajero muera o sobrevida (aunque en caso de que, en un escenario tan caótico con la evacuación de los pasajeros en una naufragio, los pajeros fuesen evacuados por orden alfabético, el nombre si podría ser una buena fuente de información), en cambio el título del mismo y por tanto la clase social del pasajero sí que podría aportarnos una información importante de cara a la predicción.
@@ -77,6 +75,15 @@ Lo que vamos hacer a continuación es añadirle a cada pasajero el número de fa
 ```{r}
 full$Fsize <- full$SibSp + full$Parch + 1
 full$Family <- paste(full$Surname, full$Fsize, sep='_')
+```
+
+Veamos cómo se distribuyen las muertes según el tamaño de la familai de cada pasajero, esto no se hace en el tutorial pero también es interesante de estudiar de cara a la exploración de datos.
+
+```{r}
+ggplot(full[1:891,], aes(Fsize, fill = factor(Survived))) + 
+  geom_histogram() +
+  scale_fill_manual(name = "¿Sobrevivió?", labels = c("No", "Sí"), values =  c("lemonchiffon4", "goldenrod")) +
+  scale_x_continuous(name = "Tamaño familia") + ylab("#pasajeros")
 ```
 
 Y ahora vamos a ver cómo se distribuye la tasa de sobrevivientes y muertos según el número de familiares que fuesen a bordo:
@@ -191,11 +198,22 @@ Vamos a ver cómo se distribuye para cada sexo la tasa de sobreviviente según l
 ```{r}
 ggplot(full[1:891,], aes(Age, fill = factor(Survived))) + 
   geom_histogram() +
-  facet_grid(.~Sex) + 
-  theme_few()
+  facet_grid(.~Sex, labeller = as_labeller(c("female" = "mujer", "male" = "hombre"))) +
+  scale_fill_manual(name = "¿Sobrevivió?", labels = c("No", "Sí"), values =  c("lemonchiffon4", "goldenrod")) +
+  scale_x_continuous(name = "Edad") + ylab("#pasajeros")
 ```
 
 Aquí lo que podemos apreciar es en primer lugar que las mujeres sobreviven en mayor proporción que los hombres, por otro lado los hombres jóvenes parecen sobrevivir en mayor proporción que los mayores, al contrario que ocurre con las mujeres.
+
+Vamos a ver también cómo se distribuyen los sobrevivientes según la tarifa que han pagado. Esto no se hace en el tutorial original pero pensamos que es también una gráfica interesante:
+
+```{r}
+ggplot(full[1:891,], aes(Fare, fill = factor(Survived))) + 
+  geom_histogram() +
+  scale_fill_manual(name = "¿Sobrevivió?", labels = c("No", "Sí"), values =  c("lemonchiffon4", "goldenrod")) +
+  scale_x_continuous(name = "Tarifa") + ylab("#pasajeros")
+```
+
 
 Vamos a crear dos nuevas variables, una que nos indica si el pasajero es un niño, considerando como niño una persona menor que 18 años (nuestro compañero Jose Ángel Díaz mejoró los resultados considerando niño aquel que tuviese menos de 16 años ya que pensó que en aquella época se consideraba adulto antes a una persona, estudiaremos esto más adelante). La otra nos indica si el pasajero es madre, para ello vemos si es una mujer por encima de los 18 años y con al menos un hijo:
 

@@ -79,8 +79,6 @@ Enlace consultado para el codigo anterior: https://www.kaggle.com/varun2145/tita
 
 Al bajar a 30 iteraciones ya bajo el score a 0.80383.
 
-TODO los siguientes experimentos con balanceo de carga y tal seran con estos parametros que empatan con el random forest.
-
 Usando unos parametros mas simples, que parecen obtener un modelo menos complejo, entonces obtengo 0.72249
 
 Simplificando aun mas el numero de iteraciones que se dan en el algoritmo y bajando el eta de 0.3 a 0.001 para que el model sea menos conservativo, TODO creo, obtengo la misma puntuacion que con el tutorial de Trevor 0.81340. Y no es justamente el mismo resultado que con Trevor, difieren en 13 predicciones.

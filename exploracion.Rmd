@@ -70,10 +70,6 @@ imbalancedPlot
 
 En la gráfica anterior también mostramos en qué proporción sobrevivieron o perecieron hombres y mujeres, esto nos da la información necesaria para poder diseñar el modelo sexista del que se habla en el tutorial de Trevol Stephens.
 
-TODO todo se va a referir a la superviviencia
-TODO distribución tarifa en muertos y no muertos
-TODO gráfica de distro de muertes según tam. de familia.
-TOODO distro muertes según edad.
 ```{r distro-clases}
 clasesPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = as.factor(Pclass))) +
               scale_x_continuous(name = "¿Sobrevivió?", breaks = c(0,1), labels = c("0" = "No", "1" = "Sí")) +
@@ -82,3 +78,10 @@ clasesPlot <- ggplot(train, aes(Survived)) + geom_bar(aes(fill = as.factor(Pclas
           
 clasesPlot
 ```
+
+Ahora vamos a ver cómo se distribuye la tasa de muertes según dos factores. Según la edad de los pasajeros y lo que pagaron por su billete:
+
+* La gráfia para la edad la tomamos directamente del tutorial de Megan Risdal.
+
+* También elaboramos la gráfica con la distribución según la tarifa en dicho tutorial por comodidad, para no repetir en este archivo el preprocesamiento realizado sobre los datos para obtener las gráficas.
+
