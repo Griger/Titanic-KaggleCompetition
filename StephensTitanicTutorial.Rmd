@@ -275,3 +275,31 @@ write.csv(cforestSolution, file = 'sols/cforestStephens.csv', row.names = F, quo
 ```
 
 429 posición con el cforest. 15/4/17
+
+# CV para train
+
+```{r}
+train <- combi[1:891,]
+
+set.seed(41192)
+folds <- createFolds(train$Survived, k = 5)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  set.seed(415)
+  fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare +
+                                       Embarked + Title + FamilySize + FamilyID,
+                 data = train[-foldIdx,], 
+                 controls=cforest_unbiased(ntree=2000, mtry=3))
+  
+  prediction <- predict(fit, train[foldIdx, ], OOB=TRUE, type = "response")
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+

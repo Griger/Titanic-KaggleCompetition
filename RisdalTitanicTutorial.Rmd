@@ -21,6 +21,7 @@ library(scales) #visualizacion
 library(dplyr) #manipulacion de datos
 library(mice) # imputacion (valores perdidos)
 library(randomForest) # el algoritmo de clasificacion que emplearemos en este tutorial
+library(caret)
 ```
 
 Una vez hecho esto pasamos a cargar los datasets, tanto el de train como el de test, estos los hemos descargado previamente de la [página de Kaggle](https://www.kaggle.com/c/titanic/data) de la competición:
@@ -251,7 +252,34 @@ solution <- data.frame(PassengerID = test$PassengerId, Survived = prediction)
 write.csv(solution, file = 'sols/RiscalSol.csv', row.names = F, quote = F)
 ```
 
-A continuación se muestra el código empleado para generar una predicción completamente aleatoria:
+### CV para el error de train
+
+```{r}
+train <- full[1:891,]
+
+set.seed(41192)
+folds <- createFolds(train$Survived, k = 5)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  rf_model <- randomForest(factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + 
+                                            Fare + Embarked + Title + 
+                                            FsizeD + Child + Mother,
+                                            data = train[-foldIdx,])
+  
+  prediction <- predict(rf_model, train[foldIdx, ])
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+
+### Generando una solución aleatoria:
 
 ```{r, eval=FALSE}
 randomPrediction = sample(c(0,1), nrow(test), replace = T)
@@ -259,7 +287,7 @@ randomSolution <- data.frame(PassengerID = test$PassengerId, Survived = randomPr
 write.csv(randomSolution, file = 'sols/randomSol.csv', row.names = F, quote = F)
 ```
 
-## Probando xgboost
+### Probando xgboost
 
 ```{r}
 library(xgboost)

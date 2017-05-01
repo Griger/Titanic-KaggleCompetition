@@ -385,3 +385,4 @@ write.csv(xgbSolution, file = 'sols/xgbSMOTEandIPF.csv', row.names = F, quote = 
 ```
 
 Puntuacion: 0.77033
+

@@ -1,0 +1,468 @@
+---
+title: "CV"
+author: "Gustavo Rivas Gervilla"
+date: "1 de mayo de 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, tidy = TRUE)
+```
+
+```{r}
+library(party)
+library(xgboost)
+library(caret)
+```
+
+```{r}
+full <- read.csv('data/fullPreproBasicoConTitulodeStephensImputacionEdadStephens.csv')
+
+train <- full[1:891,]
+
+varsIgnoradas <- c(1,4,9,11,15,17,18)
+trainFiltrado = train[,-varsIgnoradas]
+```
+
+## rpart
+
+```{r}
+#CV rpart + prepro fijado
+
+set.seed(41192)
+folds <- createFolds(trainFiltrado$Survived, k = 5)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  fit <- rpart(Survived ~ ., data=trainFiltrado[-foldIdx,], method="class")
+  
+  prediction <- predict(fit, trainFiltrado[foldIdx,], type = "class")
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+## xgboost
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[-foldIdx,predictorsNames]),label=trainFiltrado[-foldIdx,]$Survived)
+  dtest<-data.matrix(trainFiltrado[foldIdx,predictorsNames])
+  
+  nround  = 50 #use 3000 he comentado los parametros anteriores #200
+  set.seed(2045)
+  clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+  
+  pred <- predict(clf, dtest)
+  prediction <- ifelse(pred>0.5,1,0)
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+## ensamble básico
+
+
+```{r}
+rpartSol <- read.csv('sols/rpartPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv')
+randomForestSol <- read.csv('sols/cforestPreproBasicoSinChildNiMotherConTituloyEdaddeStephens.csv')
+xgbSol <- read.csv('sols/xgbPreproBasicoSinChildNiMotherConTituloyEdaddeStephensSIMPLE50.csv')
+
+ensambleSum <- rpartSol$Survived + randomForestSol$Survived + xgbSol$Survived
+
+ensambleSol <- ifelse(ensambleSum > 1, 1, 0)
+ensambleSol <- data.frame(PassengerID = test$PassengerId, Survived = ensambleSol)
+write.csv(ensambleSol, file = 'sols/ensambleBasico.csv', row.names = F, quote = F)
+```
+
+# Clasificación con balanceo de carga
+
+## Undersampling
+
+```{r}
+fullDown <- read.csv('data/fullDownPreproFijado.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullDown)
+
+train <- fullDown[1 : (nRows - nTestRows), ]
+
+varsIgnoradas <- c(1,4,9,11,15,17,18)
+trainFiltrado = train[,-varsIgnoradas]
+
+set.seed(41192)
+folds <- createFolds(trainFiltrado$Survived, k = 5)
+```
+
+### cforest
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  set.seed(415)
+  fit <- cforest(as.factor(Survived) ~ .,
+                 data = trainFiltrado[-foldIdx,], 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+  
+  prediction <- predict(fit, trainFiltrado[foldIdx,], OOB=TRUE, type = "response")
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### rpart
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  fit <- rpart(Survived ~ ., data=trainFiltrado[-foldIdx, ], method="class")
+  
+  prediction <- predict(fit, trainFiltrado[foldIdx, ], type = "class")
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+
+### xgboost
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[-foldIdx,predictorsNames]),label=trainFiltrado[-foldIdx,]$Survived)
+  dtest<-data.matrix(trainFiltrado[foldIdx,predictorsNames])
+  
+  nround  = 50 #use 3000 he comentado los parametros anteriores #200
+  set.seed(2045)
+  clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+  
+  pred <- predict(clf, dtest)
+  prediction <- ifelse(pred>0.5,1,0)
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+## Oversampling
+
+```{r}
+fullUp <- read.csv('data/fullUpPreproFijado.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullUp)
+
+train <- fullUp[1 : (nRows - nTestRows), ]
+
+varsIgnoradas <- c(1,4,9,11,15,17,18)
+trainFiltrado = train[,-varsIgnoradas]
+
+set.seed(41192)
+folds <- createFolds(trainFiltrado$Survived, k = 5)
+```
+
+### cforest
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  set.seed(415)
+  fit <- cforest(as.factor(Survived) ~ .,
+                 data = trainFiltrado[-foldIdx,], 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+  
+  prediction <- predict(fit, trainFiltrado[foldIdx,], OOB=TRUE, type = "response")
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### rpart
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  fit <- rpart(Survived ~ ., data=trainFiltrado[-foldIdx, ], method="class")
+  
+  prediction <- predict(fit, trainFiltrado[foldIdx, ], type = "class")
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### xgboost
+
+```{r}
+predictorsNames = names(trainFiltrado)[names(trainFiltrado) != 'Survived'] #names of columns after data conversion
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  dtrain<-xgb.DMatrix(data=data.matrix(trainFiltrado[-foldIdx,predictorsNames]),label=trainFiltrado[-foldIdx,]$Survived)
+  dtest<-data.matrix(trainFiltrado[foldIdx,predictorsNames])
+  
+  nround  = 50 #use 3000 he comentado los parametros anteriores #200
+  set.seed(2045)
+  clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+  
+  pred <- predict(clf, dtest)
+  prediction <- ifelse(pred>0.5,1,0)
+  
+  foldAcc <- sum(prediction == trainFiltrado[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+## Smote
+
+```{r}
+fullSMOTE <- read.csv('data/fullSMOTE.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullSMOTE)
+
+train <- fullSMOTE[1 : (nRows - nTestRows), ]
+
+set.seed(41192)
+folds <- createFolds(train$Survived, k = 5)
+```
+
+### cforest
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  set.seed(415)
+  fit <- cforest(as.factor(Survived) ~ .,
+                 data = train[-foldIdx,], 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+  
+  prediction <- predict(fit, train[foldIdx,], OOB=TRUE, type = "response")
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### rpart
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  fit <- rpart(Survived ~ ., data=train[-foldIdx, ], method="class")
+  
+  prediction <- predict(fit, train[foldIdx, ], type = "class")
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### xgboost
+
+```{r}
+predictorsNames = names(train)[names(train) != 'Survived'] #names of columns after data conversion
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  dtrain<-xgb.DMatrix(data=data.matrix(train[-foldIdx,predictorsNames]),label=train[-foldIdx,]$Survived)
+  dtest<-data.matrix(train[foldIdx,predictorsNames])
+  
+  nround  = 50 #use 3000 he comentado los parametros anteriores #200
+  set.seed(2045)
+  clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+  
+  pred <- predict(clf, dtest)
+  prediction <- ifelse(pred>0.5,1,0)
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+#Clasificación con limpieza de ruido
+
+```{r}
+fullCleaned <- read.csv('data/fullSMOTEandIPF.csv')
+
+nTestRows <- 418
+nRows <- nrow(fullCleaned)
+
+train <- fullCleaned[1 : (nRows - nTestRows), ]
+
+set.seed(41192)
+folds <- createFolds(train$Survived, k = 5)
+```
+
+### cforest
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  set.seed(415)
+  fit <- cforest(as.factor(Survived) ~ .,
+                 data = train[-foldIdx,], 
+                 controls=cforest_unbiased(ntree=2000, mtry=3, trace = TRUE))
+  
+  prediction <- predict(fit, train[foldIdx,], OOB=TRUE, type = "response")
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### rpart
+
+```{r}
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  fit <- rpart(Survived ~ ., data=train[-foldIdx, ], method="class")
+  
+  prediction <- predict(fit, train[foldIdx, ], type = "class")
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
+### xgboost
+
+```{r}
+predictorsNames = names(train)[names(train) != 'Survived'] #names of columns after data conversion
+
+param <- list(  objective           = "binary:logistic", 
+                booster             = "gbtree",
+                eta                 = 0.001, #0.3 #0.3
+                max_depth           = 8, #10
+                subsample           = 0.5, #0.7
+                colsample_bytree    = 0.6 #0.6
+)
+
+acc = 0
+for (fold in seq(5)){
+  foldIdx <- folds[[fold]]
+  
+  dtrain<-xgb.DMatrix(data=data.matrix(train[-foldIdx,predictorsNames]),label=train[-foldIdx,]$Survived)
+  dtest<-data.matrix(train[foldIdx,predictorsNames])
+  
+  nround  = 50 #use 3000 he comentado los parametros anteriores #200
+  set.seed(2045)
+  clf <- xgboost(param = param, dtrain, nrounds=nround, min_child_weight = 1, verbose=0)
+  
+  pred <- predict(clf, dtest)
+  prediction <- ifelse(pred>0.5,1,0)
+  
+  foldAcc <- sum(prediction == train[foldIdx,]$Survived) / length(foldIdx)
+  
+  acc <- acc + foldAcc
+}
+
+cat("Tasa de acierto media:", acc/5.0)
+```
+
